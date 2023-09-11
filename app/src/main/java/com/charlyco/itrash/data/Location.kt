@@ -1,5 +1,9 @@
 package com.charlyco.itrash.data
 
-data class Location(val latitude: Double, val longitude: Double) {
-    constructor() : this(0.0, 0.0)
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class Location(@SerialName("latitude") val latitude: Double?, @SerialName("longitude") val longitude: Double?){
+    constructor(): this(null, null)
 }

@@ -1,10 +1,6 @@
 package com.charlyco.itrash.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +14,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
@@ -26,8 +21,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,8 +34,10 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,41 +48,58 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
-import androidx.constraintlayout.compose.ConstraintLayout
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import com.charlyco.itrash.R
 import com.charlyco.itrash.data.Role
+import com.charlyco.itrash.data.User
 import com.charlyco.itrash.ui_utils.PlainTopBar
-import com.charlyco.itrash.ui_utils.RolesRadioButtons
+import com.charlyco.itrash.utils.DataStoreManager
 import com.charlyco.itrash.viewModels.AuthViewModel
+import com.charlyco.itrash.viewModels.RequestViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
+
+private val user = User()
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SignUpScreen(navController: NavController, authViewModel: AuthViewModel?) {
+fun SignUpScreen(
+    navController: NavController,
+    authViewModel: AuthViewModel?,
+    requestViewModel: RequestViewModel?,
+    dataStoreManager: DataStoreManager
+) {
+val createdUser: User? = authViewModel!!.authUser.observeAsState().value
+    val coroutineScope = rememberCoroutineScope()
     Scaffold(
         topBar = {PlainTopBar(navController = navController, route = "auth_screen")}
     ) {
-        ScreenContents(
-            modifier = Modifier.padding(it),
-            navController = navController,
-            authViewModel = authViewModel)
+            ScreenContents(
+                modifier = Modifier.padding(it),
+                navController = navController,
+                authViewModel = authViewModel,
+                requestViewModel = requestViewModel,
+                dataStoreManager,
+                coroutineScope = coroutineScope
+            )
+        }
     }
-}
 
 @Composable
 fun ScreenContents(
     modifier: Modifier,
     navController: NavController,
-    authViewModel: AuthViewModel?
+    authViewModel: AuthViewModel?,
+    requestViewModel: RequestViewModel?,
+    dataStoreManager: DataStoreManager,
+    coroutineScope: CoroutineScope,
 ) {
     val screenWidth = LocalConfiguration.current.screenWidthDp - 64
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -96,7 +109,14 @@ fun ScreenContents(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Logo(modifier = Modifier)
-            InputBoxesCard(Modifier, navController, authViewModel, screenWidth)
+            InputBoxesCard(
+                Modifier,
+                navController,
+                authViewModel,
+                requestViewModel,
+                screenWidth,
+                dataStoreManager,
+                coroutineScope)
         }
     }
 }
@@ -107,32 +127,36 @@ fun InputBoxesCard(
     modifier: Modifier,
     navController: NavController,
     authViewModel: AuthViewModel?,
-    screenWidth: Int
+    requestViewModel: RequestViewModel?,
+    screenWidth: Int,
+    dataStoreManager: DataStoreManager,
+    coroutineScope: CoroutineScope
 ) {
-    var fullName by remember { mutableStateOf(TextFieldValue("")) }
-    var userName by remember { mutableStateOf(TextFieldValue("")) }
-    var address by remember { mutableStateOf(TextFieldValue("")) }
-    var email by remember { mutableStateOf(TextFieldValue("")) }
-    var password by remember { mutableStateOf(TextFieldValue("")) }
+    var fullName by remember { mutableStateOf("") }
+    var userName by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(value = false) }
 
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(top = 8.dp),
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(top = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             TextField(
                 value = fullName,
                 onValueChange = {
                     fullName = it
-                    authViewModel?.user?.fullName = fullName.text
+                    user.fullName = fullName
                 },
                 colors = TextFieldDefaults.textFieldColors(
                     containerColor = MaterialTheme.colorScheme.onSecondary,
-                    textColor = MaterialTheme.colorScheme.tertiary
+                    textColor = MaterialTheme.colorScheme.onBackground
                 ),
-                label = {Text(text = stringResource(id = R.string.full_name))},
+                placeholder = {Text(text = stringResource(id = R.string.full_name))},
                 shape = MaterialTheme.shapes.medium,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 leadingIcon = {Icon(imageVector = Icons.Default.Person, contentDescription = "")},
@@ -141,17 +165,17 @@ fun InputBoxesCard(
                     .width(screenWidth.dp)
                     .height(48.dp)
             )
-            Spacer(modifier = modifier.height(16.dp))
+            Spacer(modifier = modifier.height(12.dp))
             TextField(
                 value = userName,
                 onValueChange = {
                     userName = it
-                    authViewModel?.user?.userName = userName.text
+                    user.userName = userName
                 },
-                label = {Text(text = stringResource(id = R.string.user_name))},
+                placeholder = {Text(text = stringResource(id = R.string.user_name))},
                 colors = TextFieldDefaults.textFieldColors(
                     containerColor = MaterialTheme.colorScheme.onSecondary,
-                    textColor = MaterialTheme.colorScheme.tertiary
+                    textColor = MaterialTheme.colorScheme.onBackground
                 ),
                 shape = MaterialTheme.shapes.medium,
                 leadingIcon = {Icon(imageVector = Icons.Default.AccountBox, contentDescription = "")},
@@ -160,17 +184,17 @@ fun InputBoxesCard(
                     .width(screenWidth.dp)
                     .height(48.dp)
             )
-            Spacer(modifier = modifier.height(16.dp))
+            Spacer(modifier = modifier.height(12.dp))
             TextField(
                 value = password,
                 onValueChange = {
                     password = it
-                    authViewModel?.user?.password = password.text
+                    user.password = password
                 },
-                label = {Text(text = stringResource(id = R.string.password))},
+                placeholder = {Text(text = stringResource(id = R.string.password))},
                 colors = TextFieldDefaults.textFieldColors(
                     containerColor = MaterialTheme.colorScheme.onSecondary,
-                    textColor = MaterialTheme.colorScheme.tertiary
+                    textColor = MaterialTheme.colorScheme.onBackground
                 ),
                 shape = MaterialTheme.shapes.medium,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -202,17 +226,17 @@ fun InputBoxesCard(
                     .height(48.dp)
                     .width(screenWidth.dp)
             )
-            Spacer(modifier = modifier.height(16.dp))
+            Spacer(modifier = modifier.height(12.dp))
             TextField(
                 value = email,
                 onValueChange = {
                     email = it
-                    authViewModel?.user?.email = email.text
+                    user.email = email
                 },
-                label = {Text(text = stringResource(id = R.string.email))},
+                placeholder = {Text(text = stringResource(id = R.string.email))},
                 colors = TextFieldDefaults.textFieldColors(
                     containerColor = MaterialTheme.colorScheme.onSecondary,
-                    textColor = MaterialTheme.colorScheme.tertiary
+                    textColor = MaterialTheme.colorScheme.onBackground
                 ),
                 shape = MaterialTheme.shapes.medium,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -222,17 +246,36 @@ fun InputBoxesCard(
                     .width(screenWidth.dp)
                     .height(48.dp)
             )
-            Spacer(modifier = modifier.height(16.dp))
+        Spacer(modifier = modifier.height(12.dp))
+        TextField(
+            value = phoneNumber,
+            onValueChange = {
+                phoneNumber = it
+                user.phoneNumber = phoneNumber
+            },
+            placeholder = {Text(text = stringResource(id = R.string.phone))},
+            colors = TextFieldDefaults.textFieldColors(
+                containerColor = MaterialTheme.colorScheme.onSecondary,
+                textColor = MaterialTheme.colorScheme.onBackground
+            ),
+            shape = MaterialTheme.shapes.medium,
+            leadingIcon = {Icon(imageVector = Icons.Default.AccountBox, contentDescription = "")},
+            modifier = modifier
+                .paddingFromBaseline(top = 10.dp)
+                .width(screenWidth.dp)
+                .height(48.dp)
+        )
+            Spacer(modifier = modifier.height(12.dp))
             TextField(
                 value = address,
                 onValueChange = {
                     address = it
-                    authViewModel?.user?.address = address.text
+                    user.address = address
                 },
-                label = {Text(text = stringResource(id = R.string.address))},
+                placeholder = {Text(text = stringResource(id = R.string.address))},
                 colors = TextFieldDefaults.textFieldColors(
                     containerColor = MaterialTheme.colorScheme.onSecondary,
-                    textColor = MaterialTheme.colorScheme.tertiary
+                    textColor = MaterialTheme.colorScheme.onBackground
                 ),
                 shape = MaterialTheme.shapes.medium,
                 leadingIcon = {Icon(imageVector = Icons.Default.Place, contentDescription = "")},
@@ -241,23 +284,46 @@ fun InputBoxesCard(
                     .width(screenWidth.dp)
                     .height(48.dp)
             )
-            Spacer(modifier = modifier.height(16.dp))
-            RolesRadioButtons(authViewModel = authViewModel)
-            Spacer(modifier = modifier.height(16.dp))
+            Spacer(modifier = modifier.height(12.dp))
+            RolesCheckBox()
+            Spacer(modifier = modifier.height(12.dp))
             Button(
                 modifier = modifier
-                    .paddingFromBaseline(top = 16.dp)
-                    .width(screenWidth.dp),
+                                .width(screenWidth.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondary,
                     contentColor = MaterialTheme.colorScheme.onSecondary
                 ),
                 onClick = {
-                    authViewModel?.saveUserAndReturnToken(authViewModel.user)
-                    navController.navigate("home_screen") {
-                        launchSingleTop = true
-                        popUpTo("sign_up") { inclusive = true }
-                    }
+                    coroutineScope.launch {
+                            when(user.role) {
+                                Role.CUSTOMER.name -> {
+                                    val authUser = authViewModel?.createNewCustomer(user, dataStoreManager)
+                                    if (authUser?.customer?.userName == user.userName) {
+                                        navController.navigate("home_screen") {
+                                        popUpTo("auth_screen") {inclusive = true}
+                                        launchSingleTop = true }
+                                    }
+                                }
+                                Role.AGENT.name -> {
+                                    val authUser = authViewModel?.createNewAgent(user, dataStoreManager)
+                                    if (authUser?.agent?.userName == user.userName) {
+                                            requestViewModel?.getAllPendingRequest(dataStoreManager)
+                                        navController.navigate("agent_home") {
+                                        popUpTo("auth_screen") {inclusive = true}
+                                        launchSingleTop = true }
+                                    }
+                                }
+                                else -> {
+                                    val authUser = authViewModel?.createNewAdmin(user, dataStoreManager)
+                                    if (authUser?.admin?.userName == user.userName) {
+                                        navController.navigate("admin_home") {
+                                        popUpTo("auth_screen") {inclusive = true}
+                                        launchSingleTop = true }
+                                    }
+                                }
+                            }
+                        }
                 },
                 shape = MaterialTheme.shapes.medium
             ) {
@@ -279,7 +345,7 @@ fun Logo(modifier: Modifier) {
         Image(
             painter = painterResource(id = R.drawable.app_icon),
             contentDescription = "",
-            modifier = modifier.size(96.dp),
+            modifier = modifier.size(88.dp),
             contentScale = ContentScale.Fit
         )
         Spacer(modifier = modifier.height(16.dp))
@@ -292,8 +358,33 @@ fun Logo(modifier: Modifier) {
     }
 }
 
-@Preview
 @Composable
-fun PreviewSignUp(){
-    SignUpScreen(navController = rememberNavController(), authViewModel = AuthViewModel())
+fun RolesCheckBox(
+) {
+    var selectedOption by remember { mutableStateOf("") }
+    val coroutineScope = rememberCoroutineScope()
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Role.entries.forEach { role ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .selectable(
+                        selected = role.name == selectedOption,
+                        onClick = { selectedOption = role.name }
+                    )
+            ) {
+                Checkbox(
+                    checked = role.name == selectedOption,
+                    onCheckedChange = {coroutineScope.launch {
+                        selectedOption = role.name
+                        user.role = selectedOption
+                    }})
+                Text(text = role.name)
+            }
+        }
+    }
 }
+

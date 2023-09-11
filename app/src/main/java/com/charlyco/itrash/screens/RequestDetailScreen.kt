@@ -4,16 +4,20 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -27,9 +31,14 @@ import com.charlyco.itrash.R
 import com.charlyco.itrash.data.Bin
 import com.charlyco.itrash.data.Customer
 import com.charlyco.itrash.data.DisposalRequest
+import com.charlyco.itrash.data.User
+import com.charlyco.itrash.ui_utils.ToolBarWithNavIcon
+import com.charlyco.itrash.utils.DataStoreManager
 import com.charlyco.itrash.viewModels.AuthViewModel
 import com.charlyco.itrash.viewModels.BinViewModel
 import com.charlyco.itrash.viewModels.RequestViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,42 +46,57 @@ fun RequestDetailScreen(
     requestViewModel: RequestViewModel?,
     navController: NavHostController,
     binViewModel: BinViewModel?,
-    authViewModel: AuthViewModel?
+    authViewModel: AuthViewModel?,
+    dataStoreManager: DataStoreManager
 ) {
-    val request: DisposalRequest? = requestViewModel?.getRequestById(requestViewModel.selectedRequestId)
-    val bin: Bin? = binViewModel?.getBinsById(request?.binId)
-    val customer: Customer? = authViewModel?.getCustomerById(request?.customerId)
+    val coroutineScope = rememberCoroutineScope()
+    val request: DisposalRequest? = requestViewModel?.requestDetails?.observeAsState()?.value
+    val bin: Bin? = binViewModel?.binById?.observeAsState()?.value
+    val customer: Customer? = requestViewModel?.customer?.observeAsState()?.value
     val context = LocalContext.current.applicationContext
+    val agent: User? = authViewModel?.authUser!!.observeAsState().value
 Scaffold(
-    topBar = {},
+    topBar = {
+        ToolBarWithNavIcon(
+            navController = navController,
+            route = "agent_home",
+            color = MaterialTheme.colorScheme.background)},
+    containerColor = MaterialTheme.colorScheme.background
     ) {contentPadding ->
-    Surface(
-        color = MaterialTheme.colorScheme.background,
-        modifier = Modifier.fillMaxSize()
-        ) {
-        Column {
+        Column(
+            modifier = Modifier.padding(top = 64.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+            ) {
             RequestDetail(modifier = Modifier.padding(contentPadding), request, bin, customer)
-            HandleRequestButton(authViewModel,requestViewModel, context, request)
+            Spacer(modifier = Modifier.height(32.dp))
+            HandleRequestButton(requestViewModel, context, request, agent, dataStoreManager, coroutineScope)
         }
     }
 }
-}
+
 
 @Composable
 fun HandleRequestButton(
-    authViewModel: AuthViewModel?,
     requestViewModel: RequestViewModel?,
     context: Context?,
-    request: DisposalRequest?
+    request: DisposalRequest?,
+    agent: User?,
+    dataStoreManager: DataStoreManager,
+    coroutineScope: CoroutineScope
 ) {
+    val isRequestAssigned = requestViewModel?.isRequestAssigned?.observeAsState()?.value
     Button(
         onClick = {
-            request?.agentId = authViewModel?.user?.id
-            requestViewModel?.assignAgentToRequest(request?.requestId, authViewModel?.user?.id)
-            Toast.makeText(context,
-                "Request with Id: ${request?.requestId}, assigned to ${authViewModel?.user?.userName}",
-                Toast.LENGTH_LONG).show()
-                  },
+                  coroutineScope.launch {
+                      request?.agentId = agent?.userId
+                      requestViewModel?.assignAgentToRequest(request?.requestId, agent?.userId, dataStoreManager)
+                  }
+            if (isRequestAssigned == true) {
+                Toast.makeText(context,
+                    "Request with Id: ${request?.requestId}, assigned to ${agent?.userName}",
+                    Toast.LENGTH_LONG).show()
+            }
+        },
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.secondary,
             contentColor = MaterialTheme.colorScheme.onPrimary
@@ -84,8 +108,8 @@ fun HandleRequestButton(
 
 @Composable
 fun RequestDetail(modifier: Modifier, request: DisposalRequest?, bin: Bin?, customer: Customer?) {
-    ConstraintLayout {
-        val (header, status, date, binOwner, binLocation, binSize) = createRefs()
+    ConstraintLayout(modifier = Modifier.fillMaxWidth()) {
+        val (header, status, date, binOwner, binAddress, geoLocation, binSize) = createRefs()
 
         Text(
             text = stringResource(id = R.string.request_header),
@@ -98,42 +122,51 @@ fun RequestDetail(modifier: Modifier, request: DisposalRequest?, bin: Bin?, cust
             }
         )
         Text(
-            text = "Request Status: ${request?.requestStatus?.name!!}",
+            text = "Request Status: ${request?.requestStatus}",
             modifier = Modifier.constrainAs(status) {
                 start.linkTo(parent.start, margin = 8.dp)
                 top.linkTo(header.bottom, margin = 16.dp)
                 }
             )
         Text(
-            text = "Date of Request: ${request.requestDate}",
-            modifier.constrainAs(date) {
+            text = "Date of Request: ${request?.requestDate}",
+            Modifier.constrainAs(date) {
                 top.linkTo(status.bottom, margin = 8.dp)
                 start.linkTo(parent.start, margin = 8.dp)
                 }
             )
         Text(
             text = "Name of requesting customer: ${customer?.fullName}",
-            modifier.constrainAs(binOwner) {
+            Modifier.constrainAs(binOwner) {
                 top.linkTo(date.bottom, margin = 8.dp)
                 start.linkTo(parent.start, margin = 8.dp)
             }
         )
         Text(
             text = "Size of trash bin: ${bin?.binSize}",
-            modifier.constrainAs(binSize) {
+            Modifier.constrainAs(binSize) {
                 top.linkTo(binOwner.bottom, margin = 8.dp)
                 start.linkTo(parent.start, margin = 8.dp)
             }
         )
         Text(
-            text = "Trash Bin located at: ${bin?.location}",
+            text = "Trash Bin located at: ${bin?.address}",
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .clickable { /* Open Google map and point to location on map*/ }
-                .constrainAs(binLocation) {
+                .constrainAs(binAddress) {
                     top.linkTo(binSize.bottom, margin = 8.dp)
                     start.linkTo(parent.start, margin = 8.dp)
                 }
         )
+        Text(
+            text = "Click here to view location on Google Map",
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier
+                .clickable { /* Open Google map and point to location on map*/ }
+                .constrainAs(geoLocation){
+                    top.linkTo(binAddress.bottom, margin = 8.dp)
+                    start.linkTo(parent.start, margin = 8.dp)
+                }
+            )
     }
 }

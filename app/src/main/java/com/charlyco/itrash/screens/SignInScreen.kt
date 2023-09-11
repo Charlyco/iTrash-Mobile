@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,43 +42,65 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.compose.ConstraintLayout
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
 import com.charlyco.itrash.ui_utils.PlainTopBar
 import com.charlyco.itrash.R
 import com.charlyco.itrash.data.Role
-import com.charlyco.itrash.ui_utils.RolesRadioButtons
+import com.charlyco.itrash.data.User
+import com.charlyco.itrash.utils.DataStoreManager
 import com.charlyco.itrash.viewModels.AuthViewModel
+import com.charlyco.itrash.viewModels.RequestViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SignInScreen(navController: NavHostController, authViewModel: AuthViewModel?) {
-    val authState: String by authViewModel!!.authState.observeAsState("")
+fun SignInScreen(
+    navController: NavHostController,
+    authViewModel: AuthViewModel?,
+    requestViewModel: RequestViewModel?,
+    dataStoreManager: DataStoreManager
+    //tokenDataStore: DataStore<Preferences>,
+    //locationDataStore: DataStore<Preferences>
+) {
+    val user: User? = authViewModel!!.authUser.observeAsState().value
+    val coroutineScope = rememberCoroutineScope()
     Scaffold(
         topBar = { PlainTopBar(navController, "auth_screen") }
     ) {contentPadding ->
-       SignInScreenContent(
-           modifier = Modifier.padding(contentPadding),
-           authState = authState,
-           authViewModel = authViewModel,
-           navController = navController)
+            SignInScreenContent(
+                modifier = Modifier.padding(contentPadding),
+                user = user,
+                authViewModel = authViewModel,
+                navController = navController,
+                coroutineScope,
+                requestViewModel,
+                dataStoreManager
+                //tokenDataStore,
+                //locationDataStore
+            )
     }
 }
 
 @Composable
 fun SignInScreenContent(
     modifier: Modifier,
-    authState: String,
+    user: User?,
     authViewModel: AuthViewModel?,
-    navController: NavController
+    navController: NavController,
+    coroutineScope: CoroutineScope,
+    requestViewModel: RequestViewModel?,
+    dataStoreManager: DataStoreManager
+    //tokenDataStore: DataStore<Preferences>,
+    //locationDataStore: DataStore<Preferences>
 ){
     val screenWidth = LocalConfiguration.current.screenWidthDp - 64
     Surface(
@@ -107,9 +130,12 @@ fun SignInScreenContent(
             EmailLogin(
                 modifier = Modifier,
                 screenWidth = screenWidth,
-                authState = authState,
+                user = user,
                 authViewModel = authViewModel,
-                navController = navController
+                requestViewModel = requestViewModel,
+                navController = navController,
+                coroutineScope,
+                dataStoreManager
                 )
             Spacer(modifier = modifier.height(96.dp))
             
@@ -131,23 +157,26 @@ fun SignInScreenContent(
 fun EmailLogin(
     modifier: Modifier,
     screenWidth: Int,
-    authState: String,
+    user: User?,
     authViewModel: AuthViewModel?,
-    navController: NavController
+    requestViewModel: RequestViewModel?,
+    navController: NavController,
+    coroutineScope: CoroutineScope,
+    dataStoreManager: DataStoreManager
 ) {
-    var email by remember { mutableStateOf(TextFieldValue("")) }  //will be filled from memory
-    var password by remember { mutableStateOf(TextFieldValue("")) } //if login details is saved
+    var userName by remember { mutableStateOf("") }  //will be filled from memory
+    var password by remember { mutableStateOf("") } //if login details is saved
     var showPassword by remember { mutableStateOf(value = false) }
     var isCheckBoxChecked by remember { mutableStateOf(false) }
 
     ConstraintLayout {
-        val (emailBox, passwordBox, checkBox, forgotPassword, role, button) = createRefs()
+        val (emailBox, passwordBox, checkBox, forgotPassword, button) = createRefs()
         TextField(
-            value = email,
+            value = userName,
             onValueChange = {
-                email = it
+                userName = it
             },
-            placeholder = { Text(text = stringResource(id = R.string.email))},
+            placeholder = { Text(text = stringResource(id = R.string.user_name))},
             colors = TextFieldDefaults.textFieldColors(
                 containerColor = MaterialTheme.colorScheme.onSecondary,
                 textColor = MaterialTheme.colorScheme.onBackground
@@ -242,41 +271,43 @@ fun EmailLogin(
             color = MaterialTheme.colorScheme.onBackground,
             fontSize = TextUnit(14.0f, TextUnitType.Sp)
         )
-        Surface(color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.constrainAs(role) {
-                top.linkTo(checkBox.bottom, margin = 16.dp)
-                centerHorizontallyTo(parent)
-        }) {
-            RolesRadioButtons(authViewModel = authViewModel)
-        }
+
         Button(
             modifier = modifier
                 .width(screenWidth.dp)
                 .constrainAs(button) {
                     centerHorizontallyTo(parent)
-                    top.linkTo(role.bottom, margin = 32.dp)
+                    top.linkTo(forgotPassword.bottom, margin = 32.dp)
                 },
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onSecondary
             ),
             onClick = {
-                authViewModel?.loginWithEmailAndPassword(email.text, password.text)
-                if (authState == email.text) {
-                    when(authViewModel?.user?.role) {
-                        Role.CUSTOMER -> {navController.navigate("home_screen") {
-                            popUpTo("auth_screen") {inclusive = true}
-                        } }
-                        Role.AGENT -> {navController.navigate("agent_home") {
-                            popUpTo("auth_screen") {inclusive = true}
-                        }}
+                coroutineScope.launch {
+                    val authUser = authViewModel?.loginWithUsernameAndPassword(userName, password, dataStoreManager)
+                    if (authUser?.user?.userName == userName) {
+                        when(authUser.user.role) {
+                            Role.CUSTOMER.name -> {navController.navigate("home_screen") {
+                                popUpTo("auth_screen") {inclusive = true}
+                                launchSingleTop = true
+                            } }
+                            Role.AGENT.name -> {
+                                requestViewModel?.getAllPendingRequest(dataStoreManager)
+                                navController.navigate("agent_home") {
+                                popUpTo("auth_screen") {inclusive = true}
+                                launchSingleTop = true
+                            }}
+                            else -> {navController.navigate("admin_home") {
+                                popUpTo("auth_screen") {inclusive = true}
+                                launchSingleTop = true
+                            }}
+                        }
 
-                        else -> {}
                     }
-
                 }
                 if (isCheckBoxChecked) {
-                    authViewModel?.saveLoginDetails(email.text, password.text)
+                    authViewModel?.saveLoginDetails(userName, password)
                 }
             },
             shape = MaterialTheme.shapes.medium
@@ -288,12 +319,4 @@ fun EmailLogin(
             )
         }
     }
-}
-
-@Preview
-@Composable
-fun PreviewSignInScreen() {
-    val navController = rememberNavController()
-    val authViewModel = AuthViewModel()
-    SignInScreen(navController = navController, authViewModel = authViewModel)
 }

@@ -1,41 +1,62 @@
 package com.charlyco.itrash.viewModels
 
+import android.util.Log
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.charlyco.itrash.data.Customer
 import com.charlyco.itrash.data.DisposalRequest
-import com.charlyco.itrash.data.Location
 import com.charlyco.itrash.data.RequestStatus
-import java.time.LocalDateTime
+import com.charlyco.itrash.repository.RequestRepository
+import com.charlyco.itrash.utils.DataStoreManager
 
 class RequestViewModel: ViewModel() {
-    var selectedRequestId = 0
-    fun getAllPendingRequest(location: Location): List<DisposalRequest> {
-        //call repository function to retrieve all pending request where the bin location is within permitted proximity
-        return listOf(
-            DisposalRequest(1, RequestStatus.SENT, 23, 34, LocalDateTime.now(),null),
-            DisposalRequest(2, RequestStatus.SENT, 23, 34, LocalDateTime.now(),null),
-            DisposalRequest(3, RequestStatus.SENT, 23, 34, LocalDateTime.now(),null),
-            DisposalRequest(4, RequestStatus.SENT, 23, 34, LocalDateTime.now(),null),
-            DisposalRequest(5, RequestStatus.SENT, 23, 34, LocalDateTime.now(),null)
-        )
+    var pendingRequestList: MutableLiveData<MutableList<DisposalRequest>> = MutableLiveData()
+    var requestDetails: MutableLiveData<DisposalRequest> = MutableLiveData()
+    val newRequest = DisposalRequest()
+    var customer: MutableLiveData<Customer> = MutableLiveData()
+    var isRequestAssigned: MutableLiveData<Boolean> = MutableLiveData()
+    var requestId: MutableLiveData<Int> = MutableLiveData()
+
+    suspend fun getAllPendingRequest(dataStoreManager: DataStoreManager) {
+        val location = dataStoreManager.readLocationData()
+        val requestRepository = RequestRepository(dataStoreManager)
+        val requestList = requestRepository.getPendingRequestByAgentLocation(location)
+        val pending = mutableListOf<DisposalRequest>()
+        requestList.forEach { request ->
+            if (request.requestStatus == RequestStatus.SENT.name ||
+                request.requestStatus == RequestStatus.RECEIVED.name) {
+                pending.add(request)
+            }
+        }
+        pendingRequestList.value = pending
     }
 
-    fun setSelectedRequestId(requestId: Int) {
-        selectedRequestId = requestId
+    suspend fun getRequestById(selectedRequestId: Int?, dataStoreManager: DataStoreManager){
+         val requestRepository = RequestRepository(dataStoreManager)
+        requestDetails.value = requestRepository.getRequestDetailById(selectedRequestId)
     }
 
-    fun getRequestById(selectedRequestId: Int?): DisposalRequest {
-        return DisposalRequest(1, RequestStatus.SENT, 23, 34, LocalDateTime.now(), null)
+    suspend fun assignAgentToRequest(requestId: Int?, agentId: Int?, dataStoreManager: DataStoreManager) {
+        val requestRepository = RequestRepository(dataStoreManager)
+        isRequestAssigned.value = requestRepository.assignRequestToAgent(requestId, agentId)
     }
 
-    fun assignAgentToRequest(requestId: Int?, id: Int?) {
-        TODO("Not yet implemented")
+    suspend fun sendDisposalRequest(
+        dataStoreManager: DataStoreManager
+    ){
+        val requestRepository = RequestRepository(dataStoreManager)
+        requestId.value = requestRepository.sendDisposalRequest(newRequest);
     }
 
+    suspend fun getCustomerById(customerId: Int?, dataStoreManager: DataStoreManager) {
+        val requestRepository = RequestRepository(dataStoreManager)
+        customer.value = requestRepository.getCustomerById(customerId)
+    }
 }
-class RequestViewModelFactory (): ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
 
+class RequestViewModelFactory : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(RequestViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
             return RequestViewModel() as T

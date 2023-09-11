@@ -1,16 +1,16 @@
 package com.charlyco.itrash.data
 
 data class Customer(
-    val id: Int?,
-    var userName: String,
-    var fullName: String,
-    var password: String,
-    var address: String,
-    var email: String,
-    var role: Role?,
-    val phoneNumber: String,
-    val binIds: List<Int>?,
-    val requestIds: List<Int>?
+    var userId: Int?,
+    var userName: String?,
+    var fullName: String?,
+    var password: String?,
+    var address: String?,
+    var email: String?,
+    var role: String,
+    var phoneNumber: String?,
+    var binIds: List<Int>?,
+    var requestIds: List<Int>?
     ) {
-    constructor(): this(null, "","", "", "", "", null, "", null, null)
+    constructor(): this(null, "","", "", "", "", "", "", null, null)
 }

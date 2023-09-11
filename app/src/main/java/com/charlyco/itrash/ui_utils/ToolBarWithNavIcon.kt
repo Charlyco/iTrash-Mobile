@@ -1,6 +1,7 @@
 package com.charlyco.itrash.ui_utils
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -16,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
@@ -23,21 +25,26 @@ import com.charlyco.itrash.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreenToolsBar(
+fun ToolBarWithNavIcon(
     navController: NavController,
+    route: String,
+    color: Color,
 ) {
     var onShowMenu by remember { mutableStateOf(false) }
     TopAppBar(
-        title = { Text(text = stringResource(id = R.string.app_name))},
+        title = { Text(text = stringResource(id = R.string.app_name)) },
         colors = TopAppBarDefaults.smallTopAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = color,
             navigationIconContentColor = MaterialTheme.colorScheme.primary,
             actionIconContentColor = MaterialTheme.colorScheme.primary,
             titleContentColor = MaterialTheme.colorScheme.primary
         ),
         navigationIcon = {
-            IconButton(onClick = {}){
-                Icon(painter = painterResource(id = R.drawable.app_icon), contentDescription = "App Icon")
+            IconButton(onClick = {navController.navigate(route){
+                popUpTo(route){inclusive = true}
+                launchSingleTop = true
+            } }){
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "App Icon")
             }
         },
         actions = {

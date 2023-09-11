@@ -23,4 +23,12 @@
     <string name="request_header">Disposal Request Details</string>
     <string name="fill_info">You\'re one step away, let\'s get to know you </string>
     <string name="handle_request">Handle Request</string>
+    <string name="create_bin_header">Select the properties of your new trash bin and click \"Create\".</string>
+    <string name="send_request">Send Request</string>
+    <string name="create_bin">Create Bin</string>
+    <string name="select_size">Select size of bin</string>
+    <string name="full_address">Detailed address</string>
+    <string name="all_agents">View all agents</string>
+    <string name="all_customers">View all customers</string>
+    <string name="phone">Phone Number</string>
 </resources>
